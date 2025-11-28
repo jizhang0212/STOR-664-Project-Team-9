@@ -1,35 +1,70 @@
+# Load required libraries
+library(dplyr)
 library(car)
 library(e1071)
-library(randomForest)
 
-source("src/01_load_data.R")
+# Load processed data
+ames_model_train <- readRDS("data/ames_train.rds")
+ames_model_test <- readRDS("data/ames_test.rds")
 
+# Create results directories
+dir.create("results", showWarnings = FALSE)
+dir.create("results/figures", showWarnings = FALSE)
+dir.create("results/tables", showWarnings = FALSE)
 
+# ============================================================
+# MODEL 1: Original Scale Linear Regression
+# ============================================================
+
+cat("\n========== Model 1: Original Scale ==========\n")
+
+# Fit linear model on original scale
 model1 <- lm(sale_price ~ gr_liv_area + overall_qual_encoded + year_built + 
                total_bsmt_sf + full_bath + garage_cars + kitchen_qual_encoded +
                downtown_dist + university_dist + airport_dist,
              data = ames_model_train)
 
+# Print model summary
 summary(model1)
 
+# Extract and save model performance metrics
+cat("\n========== Model 1 Results (Training Set) ==========\n")
 cat("R-squared:", summary(model1)$r.squared, "\n")
 cat("Adjusted R-squared:", summary(model1)$adj.r.squared, "\n")
 cat("F-statistic:", summary(model1)$fstatistic[1], "\n")
 
+# Test residual normality
 residuals1 <- resid(model1)
-
 shapiro_result <- shapiro.test(residuals1)
 
+cat("\n========== Normality Test ==========\n")
 print(shapiro_result)
-
 cat("Skewness:", round(skewness(residuals1), 4), "\n")
 cat("Kurtosis:", round(kurtosis(residuals1), 4), "\n")
 
+# Check multicollinearity
 vif_values <- vif(model1)
 cat("\n========== VIF Values ==========\n")
 print(vif_values)
 cat("\nNote: VIF > 5 indicates potential multicollinearity\n")
 
+# Generate diagnostic plots
+png("results/figures/model1_diagnostics.png", width = 1200, height = 1200)
+par(mfrow = c(2, 2))
+plot(model1)
+par(mfrow = c(1, 1))
+dev.off()
+
+# Plot residual distribution
+png("results/figures/model1_residuals.png", width = 800, height = 600)
+hist(residuals1, breaks = 50, 
+     main = "Distribution of Residuals (Model 1)",
+     xlab = "Residuals", col = "lightblue", freq = FALSE)
+curve(dnorm(x, mean = mean(residuals1), sd = sd(residuals1)),
+      add = TRUE, col = "red", lwd = 2)
+dev.off()
+
+# Test set predictions
 predictions1_test <- predict(model1, newdata = ames_model_test)
 
 cat("\n========== Model 1 Test Set Predictions ==========\n")
@@ -38,50 +73,93 @@ cat("Prediction range: $", format(round(min(predictions1_test), 0), big.mark = "
     " - $", format(round(max(predictions1_test), 0), big.mark = ","), "\n")
 cat("Mean prediction: $", format(round(mean(predictions1_test), 0), big.mark = ","), "\n")
 
+# ============================================================
+# MODEL 2: Log-Transformed Linear Regression
+# ============================================================
+
 cat("\n========== Model 2: Log Transformation ==========\n")
 
+# Create log-transformed variables for training set
 ames_model_train_log <- ames_model_train %>%
   mutate(
     log_sale_price = log(sale_price),
     log_gr_liv_area = log(gr_liv_area),
-    log_total_bsmt_sf = log(total_bsmt_sf + 1)
+    log_total_bsmt_sf = log(total_bsmt_sf + 1)  # Add 1 to handle zeros
   )
 
+# Create log-transformed variables for test set
 ames_model_test_log <- ames_model_test %>%
   mutate(
     log_gr_liv_area = log(gr_liv_area),
     log_total_bsmt_sf = log(total_bsmt_sf + 1)
   )
 
+# Fit log-transformed model
 model2 <- lm(log_sale_price ~ log_gr_liv_area + overall_qual_encoded + year_built + 
                log_total_bsmt_sf + full_bath + garage_cars + kitchen_qual_encoded +
                downtown_dist + university_dist + airport_dist,
              data = ames_model_train_log)
 
+# Print model summary
 summary(model2)
 
+# Check VIF
 vif2 <- vif(model2)
+cat("\n========== VIF Values ==========\n")
 print(round(vif2, 2))
 
+# Test residual normality
 residuals2 <- resid(model2)
 shapiro2 <- shapiro.test(residuals2)
 
+cat("\n========== Normality Test ==========\n")
 print(shapiro2)
-
 cat("Skewness:", round(skewness(residuals2), 4), "\n")
 cat("Kurtosis:", round(kurtosis(residuals2), 4), "\n")
 
+# Generate diagnostic plots
+png("results/figures/model2_diagnostics.png", width = 1200, height = 1200)
+par(mfrow = c(2, 2))
+plot(model2)
+par(mfrow = c(1, 1))
+dev.off()
+
+# Plot residual distribution
+png("results/figures/model2_residuals.png", width = 800, height = 600)
+hist(residuals2, breaks = 50, freq = FALSE,
+     main = "Distribution of Residuals (Model 2 - Log)",
+     xlab = "Residuals", col = "lightgreen")
+curve(dnorm(x, mean = mean(residuals2), sd = sd(residuals2)),
+      add = TRUE, col = "red", lwd = 2)
+dev.off()
+
+# Test set predictions (convert back to original scale)
 predictions2_test_log <- predict(model2, newdata = ames_model_test_log)
 predictions2_test <- exp(predictions2_test_log)
 
+cat("\n========== Model 2 Test Set Predictions ==========\n")
 cat("Number of predictions:", length(predictions2_test), "\n")
 cat("Prediction range: $", format(round(min(predictions2_test), 0), big.mark = ","), 
     " - $", format(round(max(predictions2_test), 0), big.mark = ","), "\n")
 cat("Mean prediction: $", format(round(mean(predictions2_test), 0), big.mark = ","), "\n")
 
+# ============================================================
+# OUTLIER DETECTION
+# ============================================================
 
+cat("\n========== Outlier Detection ==========\n")
+
+# Calculate Cook's Distance
 cooksd <- cooks.distance(model2)
 
+# Plot Cook's Distance
+png("results/figures/cooks_distance.png", width = 1000, height = 600)
+plot(cooksd, pch = 20, main = "Cook's Distance",
+     ylab = "Cook's Distance", xlab = "Observation Index")
+abline(h = 4/nrow(ames_model_train_log), col = "red", lty = 2)
+dev.off()
+
+# Identify influential observations
 threshold <- 4/nrow(ames_model_train_log)
 influential <- which(cooksd > threshold)
 
@@ -98,6 +176,7 @@ if (length(influential) > 0) {
   print(summary(ames_model_train$sale_price[-influential]))
 }
 
+# Additional outlier diagnostics
 std_residuals <- rstandard(model2)
 outlier_residuals <- which(abs(std_residuals) > 3)
 cat("\nStandardized residuals |z| > 3:", length(outlier_residuals), "\n")
@@ -110,41 +189,75 @@ cat("High leverage observations:", length(high_leverage), "\n")
 all_outliers <- unique(c(influential, high_leverage))
 cat("\nCombined outliers (Cook's D or high leverage):", length(all_outliers), "\n")
 
+# ============================================================
+# MODEL 3: Outlier-Removed Linear Regression
+# ============================================================
 
+cat("\n========== Model 3: Outliers Removed ==========\n")
+
+# Remove influential outliers
 ames_train_clean <- ames_model_train_log[-influential, ]
 
 cat("Original training set size:", nrow(ames_model_train_log), "\n")
 cat("After outlier removal:", nrow(ames_train_clean), "\n")
 cat("Removal percentage:", round(length(influential)/nrow(ames_model_train_log)*100, 2), "%\n")
 
+# Refit model on cleaned data
 model_clean <- lm(log_sale_price ~ log_gr_liv_area + overall_qual_encoded + year_built + 
                     log_total_bsmt_sf + full_bath + garage_cars + kitchen_qual_encoded +
                     downtown_dist + university_dist + airport_dist,
                   data = ames_train_clean)
 
+# Print model summary
 summary(model_clean)
 
+# Check VIF
 vif_clean <- vif(model_clean)
 cat("\n========== VIF Values ==========\n")
 print(round(vif_clean, 2))
 
+# Test residual normality
 residuals_clean <- resid(model_clean)
 shapiro_clean <- shapiro.test(residuals_clean)
 
+cat("\n========== Normality Test ==========\n")
 print(shapiro_clean)
-
 cat("Skewness:", round(skewness(residuals_clean), 4), "\n")
 cat("Kurtosis:", round(kurtosis(residuals_clean), 4), "\n")
 
+# Generate diagnostic plots
+png("results/figures/model3_diagnostics.png", width = 1200, height = 1200)
+par(mfrow = c(2, 2))
+plot(model_clean)
+par(mfrow = c(1, 1))
+dev.off()
+
+# Plot residual distribution
+png("results/figures/model3_residuals.png", width = 800, height = 600)
+hist(residuals_clean, breaks = 50, freq = FALSE,
+     main = "Distribution of Residuals (Model 3 - Clean)",
+     xlab = "Residuals", col = "lightcyan")
+curve(dnorm(x, mean = mean(residuals_clean), sd = sd(residuals_clean)),
+      add = TRUE, col = "red", lwd = 2)
+dev.off()
+
+# Test set predictions
 predictions_clean_test_log <- predict(model_clean, newdata = ames_model_test_log)
 predictions_clean_test <- exp(predictions_clean_test_log)
 
+cat("\n========== Model 3 Test Set Predictions ==========\n")
 cat("Number of predictions:", length(predictions_clean_test), "\n")
 cat("Prediction range: $", format(round(min(predictions_clean_test), 0), big.mark = ","), 
     " - $", format(round(max(predictions_clean_test), 0), big.mark = ","), "\n")
 cat("Mean prediction: $", format(round(mean(predictions_clean_test), 0), big.mark = ","), "\n")
 
+# ============================================================
+# MODEL COMPARISON
+# ============================================================
 
+cat("\n========== Three-Model Comparison (Training Set Performance) ==========\n")
+
+# Calculate training set predictions for all models
 predictions1_train <- predict(model1, ames_model_train)
 predictions2_train_log <- predict(model2, ames_model_train_log)
 predictions2_train <- exp(predictions2_train_log)
@@ -153,6 +266,7 @@ ames_model_train_clean_original <- ames_model_train[-influential, ]
 predictions_clean_train_log <- predict(model_clean, ames_train_clean)
 predictions_clean_train <- exp(predictions_clean_train_log)
 
+# Calculate performance metrics
 mse1_train <- mean((ames_model_train$sale_price - predictions1_train)^2)
 rmse1_train <- sqrt(mse1_train)
 mae1_train <- mean(abs(ames_model_train$sale_price - predictions1_train))
@@ -165,9 +279,9 @@ mse_clean_train <- mean((ames_model_train_clean_original$sale_price - prediction
 rmse_clean_train <- sqrt(mse_clean_train)
 mae_clean_train <- mean(abs(ames_model_train_clean_original$sale_price - predictions_clean_train))
 
+# Create comparison table
 comparison_train <- data.frame(
   Model = c("Model 1 (Original)", "Model 2 (Log)", "Model 3 (Clean)"),
-  Dataset = c("Training", "Training", "Training"),
   Sample_Size = c(nrow(ames_model_train), 
                   nrow(ames_model_train_log), 
                   nrow(ames_train_clean)),
@@ -188,28 +302,10 @@ comparison_train <- data.frame(
 
 print(comparison_train)
 
+# Save comparison table
+write.csv(comparison_train, "results/tables/model_comparison.csv", row.names = FALSE)
 
-cat("[Prediction Accuracy - R-squared]\n")
-cat("Model 1 R-squared =", round(comparison_train$R_squared[1], 4), "\n")
-cat("Model 2 R-squared =", round(comparison_train$R_squared[2], 4), "\n")
-cat("Model 3 R-squared =", round(comparison_train$R_squared[3], 4), "\n\n")
-
-cat("[Prediction Error - MSE]\n")
-cat("Model 1 MSE = $", format(round(comparison_train$MSE[1], 0), big.mark = ","), "^2\n")
-cat("Model 2 MSE = $", format(round(comparison_train$MSE[2], 0), big.mark = ","), "^2\n")
-cat("Model 3 MSE = $", format(round(comparison_train$MSE[3], 0), big.mark = ","), "^2\n\n")
-
-cat("[Prediction Error - RMSE]\n")
-cat("Model 1 RMSE = $", format(round(comparison_train$RMSE[1], 0), big.mark = ","), "\n")
-cat("Model 2 RMSE = $", format(round(comparison_train$RMSE[2], 0), big.mark = ","), "\n")
-cat("Model 3 RMSE = $", format(round(comparison_train$RMSE[3], 0), big.mark = ","), "\n\n")
-
-cat("[Prediction Error - MAE]\n")
-cat("Model 1 MAE = $", format(round(comparison_train$MAE[1], 0), big.mark = ","), "\n")
-cat("Model 2 MAE = $", format(round(comparison_train$MAE[2], 0), big.mark = ","), "\n")
-cat("Model 3 MAE = $", format(round(comparison_train$MAE[3], 0), big.mark = ","), "\n")
-
-
+# Save test set predictions
 test_predictions <- data.frame(
   Model = c("Model 1", "Model 2", "Model 3"),
   Min_Price = c(min(predictions1_test), 
@@ -229,132 +325,21 @@ test_predictions <- data.frame(
                sd(predictions_clean_test))
 )
 
-print(test_predictions)
+write.csv(test_predictions, "results/tables/test_predictions.csv", row.names = FALSE)
 
-cat("\n========== Random Forest Model ==========\n")
+# Save model objects
+saveRDS(model1, "results/model1.rds")
+saveRDS(model2, "results/model2.rds")
+saveRDS(model_clean, "results/model3.rds")
 
-rf_train_data <- ames_train_clean %>%
-  select(sale_price, gr_liv_area, overall_qual_encoded, year_built,
-         total_bsmt_sf, full_bath, garage_cars, kitchen_qual_encoded,
-         downtown_dist, university_dist, airport_dist)
+# Save predictions for use in next script
+saveRDS(list(
+  predictions1_test = predictions1_test,
+  predictions2_test = predictions2_test,
+  predictions_clean_test = predictions_clean_test,
+  residuals1 = residuals1,
+  residuals2 = residuals2,
+  residuals_clean = residuals_clean
+), "results/linear_model_outputs.rds")
 
-rf_test_data <- ames_model_test %>%
-  select(gr_liv_area, overall_qual_encoded, year_built,
-         total_bsmt_sf, full_bath, garage_cars, kitchen_qual_encoded,
-         downtown_dist, university_dist, airport_dist)
-
-cat("Random forest training data size:", nrow(rf_train_data), "\n")
-cat("Random forest test data size:", nrow(rf_test_data), "\n")
-
-cat("\nTraining random forest model (may take a few minutes)...\n")
-rf_model <- randomForest(
-  sale_price ~ .,
-  data = rf_train_data,
-  ntree = 500,
-  mtry = 3,
-  importance = TRUE,
-  na.action = na.omit
-)
-
-print(rf_model)
-
-cat("\n========== Variable Importance ==========\n")
-importance_df <- as.data.frame(importance(rf_model))
-importance_df$Variable <- rownames(importance_df)
-importance_df <- importance_df[order(-importance_df$`%IncMSE`), ]
-print(importance_df)
-
-rf_predictions_train <- predict(rf_model, rf_train_data)
-
-rf_mse_train <- mean((rf_train_data$sale_price - rf_predictions_train)^2)
-rf_rmse_train <- sqrt(rf_mse_train)
-rf_mae_train <- mean(abs(rf_train_data$sale_price - rf_predictions_train))
-
-rf_ss_res <- sum((rf_train_data$sale_price - rf_predictions_train)^2)
-rf_ss_tot <- sum((rf_train_data$sale_price - mean(rf_train_data$sale_price))^2)
-rf_r_squared_train <- 1 - (rf_ss_res / rf_ss_tot)
-
-cat("R-squared =", round(rf_r_squared_train, 4), "\n")
-cat("RMSE = $", format(round(rf_rmse_train, 0), big.mark = ","), "\n")
-cat("MAE = $", format(round(rf_mae_train, 0), big.mark = ","), "\n")
-
-rf_predictions_test <- predict(rf_model, rf_test_data)
-
-cat("Number of predictions:", length(rf_predictions_test), "\n")
-cat("Prediction range: $", format(round(min(rf_predictions_test), 0), big.mark = ","), 
-    " - $", format(round(max(rf_predictions_test), 0), big.mark = ","), "\n")
-cat("Mean prediction: $", format(round(mean(rf_predictions_test), 0), big.mark = ","), "\n")
-cat("Median prediction: $", format(round(median(rf_predictions_test), 0), big.mark = ","), "\n")
-
-comparison_final <- data.frame(
-  Model = c("Model 3 (Linear-Log)", "Random Forest"),
-  Training_Sample = c(nrow(ames_train_clean), nrow(rf_train_data)),
-  Train_R2 = c(summary(model_clean)$r.squared, rf_r_squared_train),
-  Train_RMSE = c(rmse_clean_train, rf_rmse_train),
-  Train_MAE = c(mae_clean_train, rf_mae_train),
-  Test_Mean_Pred = c(mean(predictions_clean_test), mean(rf_predictions_test)),
-  Test_Median_Pred = c(median(predictions_clean_test), median(rf_predictions_test)),
-  Test_SD_Pred = c(sd(predictions_clean_test), sd(rf_predictions_test))
-)
-
-print(comparison_final)
-
-cat("\n[Training Set Performance Comparison]\n")
-cat("Model 3 R-squared =", round(comparison_final$Train_R2[1], 4), "\n")
-cat("Random Forest R-squared =", round(comparison_final$Train_R2[2], 4), "\n")
-
-if(comparison_final$Train_R2[2] > comparison_final$Train_R2[1]) {
-  cat("Winner: Random Forest (+", 
-      round((comparison_final$Train_R2[2] - comparison_final$Train_R2[1]) * 100, 2), 
-      "%)\n\n")
-} else {
-  cat("Winner: Model 3 (+", 
-      round((comparison_final$Train_R2[1] - comparison_final$Train_R2[2]) * 100, 2), 
-      "%)\n\n")
-}
-
-cat("Model 3 RMSE = $", format(round(comparison_final$Train_RMSE[1], 0), big.mark = ","), "\n")
-cat("Random Forest RMSE = $", format(round(comparison_final$Train_RMSE[2], 0), big.mark = ","), "\n")
-
-if(comparison_final$Train_RMSE[2] < comparison_final$Train_RMSE[1]) {
-  cat("Winner: Random Forest (reduction: $", 
-      format(round(comparison_final$Train_RMSE[1] - comparison_final$Train_RMSE[2], 0), big.mark = ","), 
-      ")\n\n")
-} else {
-  cat("Winner: Model 3 (reduction: $", 
-      format(round(comparison_final$Train_RMSE[2] - comparison_final$Train_RMSE[1], 0), big.mark = ","), 
-      ")\n\n")
-}
-
-cat("[Test Set Prediction Comparison]\n")
-cat("Model 3 mean prediction = $", format(round(comparison_final$Test_Mean_Pred[1], 0), big.mark = ","), "\n")
-cat("Random Forest mean prediction = $", format(round(comparison_final$Test_Mean_Pred[2], 0), big.mark = ","), "\n\n")
-
-cat("Model 3 prediction SD = $", format(round(comparison_final$Test_SD_Pred[1], 0), big.mark = ","), "\n")
-cat("Random Forest prediction SD = $", format(round(comparison_final$Test_SD_Pred[2], 0), big.mark = ","), "\n")
-
-
-
-cat("[Training Set Performance Ranking]\n")
-cat("1. Highest R-squared: ", 
-    ifelse(rf_r_squared_train > summary(model_clean)$r.squared, 
-           "Random Forest", "Model 3"), "\n")
-cat("2. Lowest RMSE: ", 
-    ifelse(rf_rmse_train < rmse_clean_train, 
-           "Random Forest", "Model 3"), "\n")
-cat("3. Lowest MAE: ", 
-    ifelse(rf_mae_train < mae_clean_train, 
-           "Random Forest", "Model 3"), "\n\n")
-
-cat("[Model Selection Recommendation]\n")
-cat("Model 3 (Linear Regression):\n")
-cat("- Advantages: High interpretability, satisfies statistical assumptions, clear coefficient meanings\n")
-cat("- Best for: Academic research, scenarios requiring variable interpretation\n")
-cat("- Training R-squared =", round(summary(model_clean)$r.squared, 4), "\n")
-cat("- Training RMSE = $", format(round(rmse_clean_train, 0), big.mark = ","), "\n\n")
-
-cat("Random Forest:\n")
-cat("- Advantages: High prediction accuracy, captures nonlinear relationships automatically\n")
-cat("- Best for: Pure prediction tasks, Kaggle competitions\n")
-cat("- Training R-squared =", round(rf_r_squared_train, 4), "\n")
-cat("- Training RMSE = $", format(round(rf_rmse_train, 0), big.mark = ","), "\n\n")
+cat("\nResults saved to results/ directory\n")
