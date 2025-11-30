@@ -86,6 +86,3 @@ Final project reports are located in:
 * `Part2_Final_Report.pdf`
 
 ```
-
-If you'd like, I can also check your repo for consistency or generate a shorter README for GitHub’s front page.
-```
