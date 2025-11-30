@@ -12,9 +12,8 @@ Our final analysis includes:
 - Log-transformed linear regression models  
 - Outlier-removed regression models  
 - Multicollinearity evaluation using VIF  
-- Manually collected longitude and latitude for each home  
-- Computed distances to downtown Ames, Iowa State University, and the airport  
-- Comparison of linear regression, lasso, and random forest  
+- Manually collected longitude and latitude for downtown Ames, Iowa State University, and the airport 
+- Comparison of linear regression and random forest  
 - Full diagnostic checking and model selection  
 - Discussion of limitations and future extensions  
 
@@ -82,6 +81,6 @@ Final project reports are located in:
 /reports/
 ```
 
-* `Part1_Report.pdf`
-* `Part2_Final_Report.pdf`
+* `01_introduction_and_exploration.pdf`
+* `02_analysis_results_discussion.pdf`
 
