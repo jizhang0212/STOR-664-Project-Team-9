@@ -10,7 +10,7 @@ This repository contains our group project for **STOR 664 (Fall 2025)**.
 Our goal is to identify and evaluate the key determinants of **housing prices in Ames, Iowa**. Using the Ames Housing Dataset, we analyze how factors such as home size, overall quality, age, neighborhood, and various structural or amenity features contribute to the sale price of a home.
 
 Part 1 focuses on exploratory data analysis, literature review, data concerns, and the development of an analysis plan.  
-Part 2 will extend this work by fitting multiple predictive models—including linear regression, lasso regression, and nonlinear methods—to explain and predict SalePrice and log(SalePrice).
+Part 2 extends this work by fitting linear regression models that incorporate newly constructed spatial variables, apply a log transformation to address skewness, and remove influential outliers to improve model validity.
 
 ## Repository Structure
 
