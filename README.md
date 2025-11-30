@@ -85,4 +85,3 @@ Final project reports are located in:
 * `Part1_Report.pdf`
 * `Part2_Final_Report.pdf`
 
-```
