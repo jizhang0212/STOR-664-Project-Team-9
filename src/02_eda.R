@@ -1,34 +1,42 @@
+# Load required libraries
 library(dplyr)
 library(ggplot2)
 library(corrplot)
+library(scales)
 
-# Remove ID column before correlation
-train <- train %>% select(-Id)
+# Load processed data
+ames_model_train <- readRDS("data/ames_train.rds")
+ames_model_test <- readRDS("data/ames_test.rds")
 
-# only numeric variables
-num_vars <- train %>% select(where(is.numeric))
+# Create results directory
+dir.create("results", showWarnings = FALSE)
+dir.create("results/figures", showWarnings = FALSE)
 
-# correlation matrix, excluding rows with NA
-cor_mat <- cor(num_vars, use = "pairwise.complete.obs")
+# Print summary statistics
+summary(ames_model_train)
 
-# Simple correlation heatmap
-corrplot(cor_mat, method = "color", type = "upper",
-         tl.cex = 0.6, tl.col = "black")
-target <- "SalePrice"
-cors <- cor_mat[, target]
-cors <- sort(cors, decreasing = TRUE)
+# Select numeric variables for correlation analysis
+cor_data <- ames_model_train %>%
+  select(sale_price, gr_liv_area, overall_qual_encoded, year_built,
+         total_bsmt_sf, full_bath, garage_cars, kitchen_qual_encoded,
+         downtown_dist, university_dist, airport_dist)
 
-# ggplot
-cor_df <- data.frame(
-  variable = names(cors),
-  correlation = as.numeric(cors)
-)
+# Calculate correlation matrix
+cor_matrix <- cor(cor_data)
+cat("\nCorrelation Matrix:\n")
+print(round(cor_matrix, 3))
 
-# Barplot of correlations with SalePrice
-ggplot(cor_df %>% filter(variable != target),
-       aes(x = reorder(variable, correlation), y = correlation)) +
-  geom_col() +
-  coord_flip() +
-  labs(x = "Variable",
-       y = paste("Correlation with", target),
-       title = paste("Correlation of Numeric Predictors with", target))
+# Save correlation matrix
+write.csv(round(cor_matrix, 3), "results/correlation_matrix.csv")
+
+# Visualize correlation matrix
+png("results/figures/correlation_matrix.png", width = 800, height = 800)
+corrplot(cor_matrix, method = "color", type = "upper",
+         addCoef.col = "black", number.cex = 0.6,
+         tl.col = "black", tl.srt = 45,
+         title = "Correlation Matrix of Selected Variables",
+         mar = c(0,0,2,0))
+dev.off()
+
+cat("\nCorrelation matrix saved to results/correlation_matrix.csv\n")
+cat("Correlation plot saved to results/figures/correlation_matrix.png\n")

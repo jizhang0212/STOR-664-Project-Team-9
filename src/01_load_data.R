@@ -1,73 +1,76 @@
-############################################
-## 1. Load packages
-############################################
-library(tidyverse)
-library(janitor)
+# Load required libraries
+library(AmesHousing)
+library(dplyr)
 
-############################################
-## 2. Import and clean column names
-############################################
-ames <- read_csv("train.csv", na = c("", "NA")) %>%
-  clean_names()    # convert to snake_case
+# Define key location coordinates
+downtown <- c(42.025056, -93.614126)
+university <- c(42.026546, -93.646443)
+airport <- c(41.998346, -93.621765)
 
-############################################
-## 3. Meaningful NA (does not exist → use "None")
-############################################
-meaningful_na_vars <- c(
-  "alley", "bsmt_qual", "bsmt_cond", "bsmt_exposure",
-  "bsmt_fin_type1", "bsmt_fin_type2", "fireplace_qu",
-  "garage_type", "garage_finish", "garage_qual",
-  "garage_cond", "pool_qc", "fence", "misc_feature",
-  "mas_vnr_type"        # masonry veneer type NA = None
-)
+# Load Ames housing dataset
+ames <- make_ames()
 
-ames <- ames %>%
-  mutate(across(all_of(meaningful_na_vars),
-                ~ replace_na(.x, "None")))
+# Select relevant variables
+ames_selected <- ames %>%
+  select(Latitude, Longitude, Gr_Liv_Area, Overall_Qual, Year_Built,
+         Total_Bsmt_SF, Full_Bath, Garage_Cars, Kitchen_Qual, Sale_Price)
 
-############################################
-## 4. Meaningful NA for numeric structural values
-## (structure does not exist → set to 0)
-############################################
-zero_fill_vars <- c(
-  "bsmt_fin_sf1", "bsmt_fin_sf2", "bsmt_unf_sf",
-  "total_bsmt_sf",
-  "garage_area", "garage_cars",
-  "pool_area",
-  "mas_vnr_area"        # veneer area NA = 0
-)
+# Calculate Euclidean distances to key locations
+ames_selected <- ames_selected %>%
+  mutate(
+    Downtown_Dist = sqrt((Latitude - downtown[1])^2 + (Longitude - downtown[2])^2),
+    University_Dist = sqrt((Latitude - university[1])^2 + (Longitude - university[2])^2),
+    Airport_Dist = sqrt((Latitude - airport[1])^2 + (Longitude - airport[2])^2)
+  )
 
-ames <- ames %>%
-  mutate(across(all_of(zero_fill_vars),
-                ~ replace_na(.x, 0)))
+# Define encoding mappings for categorical variables
+kitchen_qual_mapping <- c("Poor" = 1, "Fair" = 2, "Typical" = 3, 
+                          "Good" = 4, "Excellent" = 5)
 
-############################################
-## 5. GarageYrBlt meaningful NA (no garage)
-############################################
-ames$garage_yr_blt[is.na(ames$garage_yr_blt)] <- 0
+overall_qual_mapping <- c("Very_Poor" = 1, "Poor" = 2, "Fair" = 3, 
+                          "Below_Average" = 4, "Average" = 5,
+                          "Above_Average" = 6, "Good" = 7, "Very_Good" = 8,
+                          "Excellent" = 9, "Very_Excellent" = 10)
 
-############################################
-## 6. Real Missing Values — imputation
-############################################
+# Encode categorical variables and standardize column names
+ames_model <- ames_selected %>%
+  mutate(
+    kitchen_qual_encoded = as.numeric(kitchen_qual_mapping[as.character(Kitchen_Qual)]),
+    overall_qual_encoded = as.numeric(overall_qual_mapping[as.character(Overall_Qual)]),
+    sale_price = Sale_Price,
+    gr_liv_area = Gr_Liv_Area,
+    year_built = Year_Built,
+    total_bsmt_sf = Total_Bsmt_SF,
+    full_bath = Full_Bath,
+    garage_cars = Garage_Cars,
+    downtown_dist = Downtown_Dist,
+    university_dist = University_Dist,
+    airport_dist = Airport_Dist
+  ) %>%
+  select(sale_price, gr_liv_area, overall_qual_encoded, year_built,
+         total_bsmt_sf, full_bath, garage_cars, kitchen_qual_encoded,
+         downtown_dist, university_dist, airport_dist)
 
-## 6a. LotFrontage — impute with median
-ames$lot_frontage[is.na(ames$lot_frontage)] <-
-  median(ames$lot_frontage, na.rm = TRUE)
+# Remove missing values
+ames_model <- na.omit(ames_model)
 
-## 6b. Electrical — impute with mode
-mode_val <- ames %>%
-  filter(!is.na(electrical)) %>%
-  count(electrical) %>%
-  arrange(desc(n)) %>%
-  slice(1) %>%
-  pull(electrical)
+# Print dataset information
+cat("Dataset size:", nrow(ames_model), "\n")
+cat("Number of variables:", ncol(ames_model), "\n")
 
-ames$electrical <- replace_na(ames$electrical, mode_val)
+# Split data into training (80%) and test (20%) sets
+set.seed(123)  # For reproducibility
+train_index <- sample(1:nrow(ames_model), size = 0.8 * nrow(ames_model))
 
-############################################
-## 7. Done — all meaningful NA handled,
-## and real NA imputed appropriately
-############################################
+ames_model_train <- ames_model[train_index, ]
+ames_model_test <- ames_model[-train_index, ]
 
-glimpse(ames)
-sum(is.na(ames))   # Should be 0
+cat("\nTraining set size:", nrow(ames_model_train), "\n")
+cat("Test set size:", nrow(ames_model_test), "\n")
+
+# Save processed datasets
+dir.create("data", showWarnings = FALSE)
+saveRDS(ames_model_train, "data/ames_train.rds")
+saveRDS(ames_model_test, "data/ames_test.rds")
+
+cat("\nProcessed data saved to data/ directory\n")

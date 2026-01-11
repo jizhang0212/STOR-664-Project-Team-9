@@ -6,23 +6,37 @@
 - **Tiger (Jinghao) Teng** (@TigerTeng1024)
 
 ## Overview
-This repository contains our group project for **STOR 664 (Fall 2025)**.  
-Our goal is to identify and evaluate the key determinants of **housing prices in Ames, Iowa**. Using the Ames Housing Dataset, we analyze how factors such as home size, overall quality, age, neighborhood, and various structural or amenity features contribute to the sale price of a home.
+This repository contains our complete project for **STOR 664 (Fall 2025)**. Our goal is to identify and evaluate the key determinants of **housing prices in Ames, Iowa** using the Ames Housing Dataset. In Part 2, we extend the exploratory analysis from Part 1 by incorporating spatial variables, fitting multiple regression models, conducting diagnostic assessments, and comparing model performance.
 
-Part 1 focuses on exploratory data analysis, literature review, data concerns, and the development of an analysis plan.  
-Part 2 will extend this work by fitting multiple predictive models—including linear regression, lasso regression, and nonlinear methods—to explain and predict SalePrice and log(SalePrice).
+Our final analysis includes:
+- Log-transformed linear regression models  
+- Outlier-removed regression models  
+- Multicollinearity evaluation using VIF  
+- Manually collected longitude and latitude for downtown Ames, Iowa State University, and the airport 
+- Comparison of linear regression and random forest  
+- Full diagnostic checking and model selection  
+- Discussion of limitations and future extensions  
 
 ## Repository Structure
 
-| Folder | Purpose | Key Files |
-|--------|---------|-----------|
-| `/data/raw` | Original unmodified datasets | `train.csv`, `test.csv` |
-| `/data/processed` | Cleaned datasets used for modeling | (generated in Part 2) |
-| `/src` | Code for data exploration, cleaning, and modeling | (generated in Part 2) |
-| `/results/figures` | Plots and visualizations | `corr_heatmap.png` |
-| `/results/tables` | Model output summaries | regression tables, metrics |
-| `/reports` | Written deliverables | Part1 Report, Part2 Final Report |
-| Root folder | Documentation | `README.md` |
+```
+
+src/
+├── 01_load_data.R        # Data import and preprocessing
+├── 02_eda.R              # Exploratory data analysis
+├── 03_fit_models.R       # Model fitting and statistical analysis
+├── 04_generate_figures.R # Visualization and table generation
+
+````
+
+| Folder | Purpose |
+|--------|---------|
+| `/data/raw` | Original datasets (`train.csv`, `test.csv`) |
+| `/data/processed` | Cleaned datasets created during analysis |
+| `/src` | R scripts used for data cleaning, EDA, and modeling |
+| `/results/figures` | Plots and visualizations used in the report |
+| `/reports` | Written deliverables: Part 1 and Part 2 reports |
+| Root folder | Documentation including `README.md` |
 
 ## Getting Started
 
@@ -30,20 +44,43 @@ Part 2 will extend this work by fitting multiple predictive models—including l
 ```bash
 git clone https://github.com/mzhouUNC/stor-664-project-team9
 cd stor-664-project-team9/
-```
+````
 
-### 2. Install dependencies
-Python example:
+### 2. Run analysis scripts
+
+Execute the R scripts in order:
+
 ```bash
-pip install -r requirements.txt
+Rscript src/01_load_data.R
+Rscript src/02_eda.R
+Rscript src/03_fit_models.R
+Rscript src/04_generate_figures.R
 ```
 
-R example:
-```r
-renv::restore()
+Figures used in the report are saved in:
+
+```
+/results/figures/
 ```
 
-### 3. Run analysis scripts
-```bash
-python src/eda.py
+Processed datasets created during analysis are stored in:
+
 ```
+/data/processed/
+```
+
+## Part 2 Summary
+
+Part 2 builds upon the exploratory work from Part 1 by fitting and evaluating several models for predicting SalePrice and log(SalePrice). Major enhancements include the creation of spatial distance features (to downtown, the university, and the airport), improved model diagnostics, VIF-based multicollinearity checks, outlier removal using Cook’s distance, and the addition of nonlinear modeling via a random forest. These extensions produced more reliable inference and improved predictive performance.
+
+## Reports
+
+Final project reports are located in:
+
+```
+/reports/
+```
+
+* `01_introduction_and_exploration.pdf`
+* `02_analysis_results_discussion.pdf`
+
